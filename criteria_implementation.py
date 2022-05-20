@@ -2,48 +2,67 @@ import os
 import pandas as pd
 import numpy as np
 
+#Criteria 1: Galaxy mass
 def check_galaxy_masses(mass):
+    #Starts with an array of 1s (True) and sets those outside range to 0
     crit1 = np.ones(mass.size,dtype=bool)
     crit1[(mass < 70) | (mass > 200)] = 0
     return crit1
 
+#Criteria 4 part 1: Cluster mass
 def check_cluster_masses(data):
+    #Find clusters that are within the mass range
     correct_mass = np.zeros(data['row_id'].size,dtype=bool)
     correct_mass[(data['MDPL__FOF__mass'] < 1.8 * 10**15) & (data['MDPL__FOF__mass'] > 0.6 * 10**15)] = 1
-
+    
+    #Get coordinates of those clusters
     cluster_xs = data['MDPL__FOF__x'][correct_mass]
     cluster_ys = data['MDPL__FOF__y'][correct_mass]
     cluster_zs = data['MDPL__FOF__z'][correct_mass]
     cluster_coordinates = cluster_xs,cluster_ys,cluster_zs
     return cluster_coordinates
 
+#Criteria 4 part 2: Distance to clusters
 def check_distances(cluster_coords,transposed):
+    #For a given cluster, calculate distance to each galaxy and select those in the appropriate range
     d = np.linalg.norm(transposed-np.asarray(cluster_coords),axis=1)
     d[(d < 8) | (d > 16)] = 0
     return (np.asarray(d).nonzero()[0]) #returns indexes (within crit1) of those that pass crit4 (for given cluster)
 
+#Criteria 2: Bulk Flow
 def bulk_calc(id):
+    #Calculate distance of each galaxy to the investigated galaxy, select those within range
     d = pd.eval('((df.X - df.X[id])**2 + (df.Y - df.Y[id])**2 + (df.Z - df.Z[id])**2)**(1/2)') #np.linalg.norm is faster above but slower here
     inrange = (d <= 3.125)
+    
     peculiar_x = df.X_Velocity[inrange]
     peculiar_y = df.Y_Velocity[inrange]
     peculiar_z = df.Z_Velocity[inrange]
     vx = peculiar_x.sum() / peculiar_x.size
     vy = peculiar_y.sum() / peculiar_y.size
     vz = peculiar_z.sum() / peculiar_z.size
+    
+    #Average the velocities
     v = (vx**2 + vy**2 + vz**2)**(1/2)
     bulk = np.nanmean(v)
+    
+    #Return 1 if bulk flow is within the range
     if (622-155) < bulk < (622+155):
         return 1
     else:
         return 0
 
+#Criteria 3: Density contrast
 def contrast(id,mass,vs,rhobar):
+    #Calculate distance of each galaxy to the investigated galaxy, select those within range
     d = pd.eval('((df.X - df.X[id])**2 + (df.Y - df.Y[id])**2 + (df.Z - df.Z[id])**2)**(1/2)')
     mass[d > 3.125] = 0
+    
+    #Calculate the density contrast
     rho = mass.sum() / vs
     density_contrast = (rho - rhobar) / rhobar
-    print(density_contrast)
+
+    #Return 1 if within the range
     if -0.2 < density_contrast < 3:
         return 1
     else:
